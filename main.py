@@ -1,27 +1,25 @@
 #%%
 import csv
 import heapq
+import sqlparse
 from typing import List
 from datetime import datetime
 
 
-with open('consulta_cand_2018/consulta_cand_2018_BR.csv', encoding="latin-1") as csv_file:
-    csv_reader = csv.reader(csv_file, delimiter=',')
-    csv_info = [row[0].replace('"', '').split(';') for row in csv_reader]
+with open('consulta_cand_2018/consulta_cand_2018_BR.csv',
+          encoding="latin-1") as csv_file:
+    csv_reader = csv.reader(csv_file, delimiter='\n')
+    csv_info = [row[0].replace('"', '').replace(",", " ").split(';')
+                for row in csv_reader]
     csv_fields = csv_info.pop(0)
 
 
 
 #%%
-def get_column(fieldname: str, header: List[str], table: List[list]) -> List[str]:
-    index = header.index(fieldname)
-    column = [x[index] for x in table]
-    return column
+
 
 
 #%%
-lista = []
-
 class HeapRecord(list):
     sort_parameters = []
 
@@ -47,11 +45,20 @@ class HeapRecord(list):
         else:
             return False
 
+
 class HeapTable(list):
     sort_parameters = []
 
+    def __init__(self, list_of_objs: list, parameters: List[int] = [0]):
+        list_of_objs = [HeapRecord(x, parameters) for x in list_of_objs]
+        super().__init__(list_of_objs)
+
+
+
 #%%
 class DBFile(object):
+    data = None
+    header = None
     struct = ""
     schema = ""
 
@@ -64,10 +71,10 @@ class DBFile(object):
             if not file_content:
                 raise OSError(schema_file + " was empty.")
 
-            schema_str += "\n".join([
+            schema_str += "".join(
                 file_content[:2]
-                + ["Modification date: {}".format(now)]
-                + file_content[-1]])
+                + ["Modification date: {}".format(now) + "\n"]
+                + [file_content[-1]])
             f.close()
         except OSError:
             schema_str = "File structure: {}\n" \
@@ -90,20 +97,50 @@ class DBFile(object):
     
     def parse(self, statement):
         raise NotImplementedError
-    
+
+    def get_column(self, fieldname: str) -> List[str]:
+        index = self.header.index(fieldname)
+        column = [x[index] for x in self.data]
+        return column
+
 
 class HeapDBFile(DBFile):
-    heap = []
     struct = "Heap"
 
-    def __init__(self, filename: str, schema_file: str):
+    def __init__(self, filename: str, schema_file: str,
+                 parameters: List[int] = [15]):
         with open(filename, mode="r", encoding="latin-1") as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=',')
-            csv_info = [row[0].replace('"', '').split(';') for row in csv_reader]
-            csv_fields = csv_info.pop(0)
-
-            self.schema = ":{}({});".join(csv_fields)
+            self.data = HeapTable([HeapRecord([row[0].replace('"', '').split(';')
+                                   for row in csv_reader])], parameters)[0]
+            self.header = self.data.pop(0)
+            self.schema = ":{}({});".join(self.header)
 
             super().__init__(schema_file)
 
+    def parse(self, statement):
+        ops = sqlparse.parse(statement)[0].tokens
+        if str(ops[0]).lower() == "select":
+            return self.select(ops[1:])
+        if str(ops[0]).lower() == "insert":
+            return self.insert(ops[1:])
+        if str(ops[0]).lower() == "delete":
+            return self.delete(ops[1:])
+        
+        return False
+
+    def select(self, statement):
+        columns = str(statement[0]).split(",")
+        tables = str( (statement[2:] + [None])[0] )
+        where = str( (statement[3:] + [None])[0] ).split(" and ")
+
+        return zip(*[self.get_column(x) for x in self.header])
+
+
+
 new_heap = HeapDBFile("consulta_cand_2018/consulta_cand_2018_BR.csv", "test.txt")
+result = new_heap.parse("select shdnslkjdhn")
+for x in result:
+    for y in x:
+        print(y, end=",")
+    print("\n")
