@@ -19,6 +19,36 @@ def get_column(fieldname: str, header: List[str], table: List[list]) -> List[str
     return column
 
 
+#%%
+lista = []
+
+class HeapRecord(list):
+    sort_parameters = []
+
+    def __init__(self, list_of_objs: list, parameters: List[int] = [0]):
+        self.sort_parameters = parameters
+        super().__init__(list_of_objs)
+
+    def __lt__(self, value):
+        for field in self.sort_parameters:
+            if self[field] < value[field]:
+                return True
+            elif self[field] > value[field]:
+                return False
+        else:
+            return False
+
+    def __gt__(self, value):
+        for field in self.sort_parameters:
+            if self[field] < value[field]:
+                return False
+            elif self[field] > value[field]:
+                return True
+        else:
+            return False
+
+class HeapTable(list):
+    sort_parameters = []
 
 #%%
 class DBFile(object):
